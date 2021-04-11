@@ -1,8 +1,10 @@
 //jshint esversion:6
+require('dotenv').config();
 const express = require("express");
 const ejs = require("ejs");
+const md5 = require('md5')
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+// const encrypt = require("mongoose-encryption");
 const app = express();
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -18,9 +20,9 @@ const user = new mongoose.Schema({
   password:String
 });
 //----------------------------------------------------- encrypting password field for database
-const secret = "Thisisourlittlesecret";
+
 // always add this plugin before mongoose model
-user.plugin(encrypt, { secret: secret, encryptedFields: ["password"] });
+// user.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
 // creating collection of users
 const User = mongoose.model("User", user);
 // -------------------------------------------------------Home Route------------------------------------
@@ -35,7 +37,7 @@ app
   })
   .post((req, res) => {
     const emailFromUI = req.body.username;
-    const passwordFromUI = req.body.password;
+    const passwordFromUI = md5(req.body.password);
     // adding user document to users colection
     const newUser = new User({
       email: emailFromUI,
@@ -56,7 +58,7 @@ app
   })
   .post((req, res) => {
     const emailFromUI = req.body.username;
-    const passwordFromUI = req.body.password;
+    const passwordFromUI = md5(req.body.password);
     User.findOne({ email: emailFromUI }, (err, foundUser) => {
       if (err) {
         console.log(err);
