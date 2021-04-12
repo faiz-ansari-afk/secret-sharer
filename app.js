@@ -33,7 +33,8 @@ mongoose.set("useCreateIndex",true)
 const user = new mongoose.Schema({
   email: String,
   password: String,
-  googleId:String
+  googleId:String,
+  username: String
 });
 // -----------------------connect passport-local-mongoose
 user.plugin(passportLocalMongoose);
@@ -68,10 +69,29 @@ passport.use(new GoogleStrategy({
 },
 // accessToken allowed us to access user data for longer period of time
 function(accessToken, refreshToken, profile, cb) {
-  User.findOrCreate({ googleId: profile.id }, function (err, user) {
-    console.log(profile)
-    return cb(err, user);
-  });
+  // User.findOrCreate({ username: profile.emails[0].value ,googleId: profile.id }, function (err, user) {
+  //   console.log(profile)
+  //   return cb(err, user);
+  // });
+  User.findOne( {username:profile.displayName ,googleId : profile.id}, function( err, foundUser ){
+    if( !err ){                                                          //Check for any errors
+        if( foundUser ){                                          // Check for if we found any users
+            return cb( null, foundUser );                  //Will return the foundUser
+        }else {                                                        //Create a new User
+            const newUser = new User({
+                googleId : profile.id,
+                username : profile.displayName
+            });
+            newUser.save( function( err ){
+                if(!err){
+                    return cb(null, newUser);                //return newUser
+                }
+            });
+        }
+    }else{
+        console.log( err );
+    }
+});
 }
 ));
 // -------------------------------------------------------Home Route------------------------------------
@@ -80,7 +100,7 @@ app.get("/", (req, res) => {
 });
 // ----------------------------auth/google Route----------------------
 app.route("/auth/google").get(
-  passport.authenticate('google', { scope:["profile"] })
+  passport.authenticate('google', { scope:["profile","email"] })
 )
 
 app.get("/auth/google/secrets", 
@@ -99,6 +119,7 @@ app
       res.redirect("/login")
     }
   });
+  // ----------------------------------------------------------submit route-------------------------
 //------------------------------------------------------- Register Route----------------------------------------
 app
   .route("/register")
