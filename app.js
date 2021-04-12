@@ -7,9 +7,10 @@ const mongoose = require("mongoose");
 const session = require('express-session');
 const passport = require('passport');
 const passportLocalMongoose = require('passport-local-mongoose');
-// ---------------------------------------------hashing and salting using bcrypt
+const  GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-findorcreate');
 
-// const encrypt = require("mongoose-encryption");
+
 const app = express();
 app.use(express.static("public"));
 app.set("view engine", "ejs");
@@ -32,9 +33,11 @@ mongoose.set("useCreateIndex",true)
 const user = new mongoose.Schema({
   email: String,
   password: String,
+  googleId:String
 });
 // -----------------------connect passport-local-mongoose
-user.plugin(passportLocalMongoose)
+user.plugin(passportLocalMongoose);
+user.plugin(findOrCreate);
 //----------------------------------------------------- encrypting password field for database
 
 // always add this plugin before mongoose model
@@ -44,12 +47,48 @@ const User = new mongoose.model("User", user);
 
 // --------serialize and deserialize after mongoose model
 passport.use(User.createStrategy());
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  User.findById(id, function(err, user) {
+    done(err, user);
+  });
+});
+// this only works for local authentication
+// passport.serializeUser(User.serializeUser());
+// passport.deserializeUser(User.deserializeUser());
+// --------------------------------Google Authentication-----------------------
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: "http://localhost:3000/auth/google/secrets",
+  userProfileURL:"https://www.googleapis.com/oauth2/v3/userinfo"
+},
+// accessToken allowed us to access user data for longer period of time
+function(accessToken, refreshToken, profile, cb) {
+  User.findOrCreate({ googleId: profile.id }, function (err, user) {
+    console.log(profile)
+    return cb(err, user);
+  });
+}
+));
 // -------------------------------------------------------Home Route------------------------------------
 app.get("/", (req, res) => {
   res.render("home");
 });
+// ----------------------------auth/google Route----------------------
+app.route("/auth/google").get(
+  passport.authenticate('google', { scope:["profile"] })
+)
+
+app.get("/auth/google/secrets", 
+  passport.authenticate('google', { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect("/secrets");
+  });
 // ------------------------------------------------------Secrets Route----------------------
 app
   .route("/secrets")
