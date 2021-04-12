@@ -1,9 +1,12 @@
 //jshint esversion:6
-require('dotenv').config();
+require("dotenv").config();
 const express = require("express");
 const ejs = require("ejs");
-const md5 = require('md5')
+// const md5 = require('md5')
 const mongoose = require("mongoose");
+// ---------------------------------------------hashing and salting using bcrypt
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 // const encrypt = require("mongoose-encryption");
 const app = express();
 app.use(express.static("public"));
@@ -14,10 +17,10 @@ mongoose.connect("mongodb://localhost:27017/users", {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 });
-// creating schema of users
+//--------------------------------------------------- creating schema of users
 const user = new mongoose.Schema({
-  email:String,
-  password:String
+  email: String,
+  password: String,
 });
 //----------------------------------------------------- encrypting password field for database
 
@@ -37,18 +40,22 @@ app
   })
   .post((req, res) => {
     const emailFromUI = req.body.username;
-    const passwordFromUI = md5(req.body.password);
+    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+      // Store hash in your password DB.
+      const newUser = new User({
+        email: emailFromUI,
+        password: hash,
+      });
+      newUser.save((err) => {
+        if (!err) {
+          console.log("saved database");
+        }
+      });
+      res.render("secrets");
+    });
+
+    // const passwordFromUI = md5(req.body.password);
     // adding user document to users colection
-    const newUser = new User({
-      email: emailFromUI,
-      password: passwordFromUI,
-    });
-    newUser.save((err) => {
-      if (!err) {
-        console.log("saved database");
-      }
-    });
-    res.render("secrets");
   });
 // --------------------------------------------------------Login route
 app
@@ -58,14 +65,19 @@ app
   })
   .post((req, res) => {
     const emailFromUI = req.body.username;
-    const passwordFromUI = md5(req.body.password);
+    // const passwordFromUI = md5(req.body.password);
+
     User.findOne({ email: emailFromUI }, (err, foundUser) => {
       if (err) {
         console.log(err);
       } else {
         if (foundUser) {
-          if (foundUser.password === passwordFromUI) res.render("secrets");
-          else res.send("Enter valid Credentials");
+          // comparing login password from database password
+          bcrypt.compare(req.body.password, foundUser.password, function (err, result) {
+            
+            if (result) res.render("secrets");
+            else res.send("Enter valid Credentials");
+          });
         }
       }
     });
