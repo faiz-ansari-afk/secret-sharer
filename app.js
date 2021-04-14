@@ -30,21 +30,22 @@ mongoose.connect("mongodb://localhost:27017/users", {
 });
 mongoose.set("useCreateIndex",true)
 //--------------------------------------------------- creating schema of users
-const user = new mongoose.Schema({
+const userSchema = new mongoose.Schema({
   email: String,
   password: String,
   googleId:String,
-  username: String
+  username: String,
+  secret: String
 });
 // -----------------------connect passport-local-mongoose
-user.plugin(passportLocalMongoose);
-user.plugin(findOrCreate);
+userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 //----------------------------------------------------- encrypting password field for database
 
 // always add this plugin before mongoose model
 // user.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ["password"] });
 // creating collection of users
-const User = new mongoose.model("User", user);
+const User = new mongoose.model("User", userSchema);
 
 // --------serialize and deserialize after mongoose model
 passport.use(User.createStrategy());
@@ -73,11 +74,13 @@ function(accessToken, refreshToken, profile, cb) {
   //   console.log(profile)
   //   return cb(err, user);
   // });
-  User.findOne( {username:profile.displayName ,googleId : profile.id}, function( err, foundUser ){
+  User.findOne( {username:profile.displayName, googleId : profile.id}, function( err, foundUser ){
     if( !err ){                                                          //Check for any errors
         if( foundUser ){                                          // Check for if we found any users
             return cb( null, foundUser );                  //Will return the foundUser
-        }else {                                                        //Create a new User
+        }
+        else {      
+                                              //Create a new User
             const newUser = new User({
                 googleId : profile.id,
                 username : profile.displayName
@@ -114,12 +117,49 @@ app
   .route("/secrets")
   .get((req,res)=>{
     if (req.isAuthenticated()){
-      res.render("secrets")
+      User.find({"secret":{$ne:null}}, (err,foundUser)=>{
+        if(err)
+        console.log(err)
+        else{
+          if(foundUser){
+            res.render("secrets",{userWithSecret:foundUser})
+          }
+        }
+      })
     }else{
       res.redirect("/login")
     }
+   
   });
   // ----------------------------------------------------------submit route-------------------------
+  app.route("/submit").get( (req,res)=>{
+    if (req.isAuthenticated()){
+      res.render("submit")
+    }else{
+      res.redirect("/login")
+    }
+  }).post((req,res)=>{
+    const submittedSecret = req.body.secret;
+    // console.log(req)
+    // console.log(req.user.id)
+    User.findById(req.user.id, (err,foundUser)=>{
+      if(err)
+      console.log(err)
+      else{
+        if(foundUser){
+          foundUser.secret = submittedSecret;
+          foundUser.save(err=>{
+            if(err){
+              console.log("Err while adding particular secret")
+            }
+            else{
+              res.redirect("/secrets");
+            }
+          })
+        }
+      }
+    })
+  })
 //------------------------------------------------------- Register Route----------------------------------------
 app
   .route("/register")
